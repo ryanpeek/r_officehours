@@ -14,15 +14,17 @@ xdf <- range_read("17ps4aqRyaIfpu7KdGsy2HRZaaQiXUfLrpUbaR9yS51E",sheet=2);
 # xOpen <- googlesheets4::gs4_browse("17ps4aqRyaIfpu7KdGsy2HRZaaQiXUfLrpUbaR9yS51E")
 xdf <- janitor::clean_names(xdf); 
 
+
 glimpse(xdf); 
 
 select(xdf,unique_id, coordinates,symbol_type, was_this_symbol_removed, location, state, feature_name) %>% 
   # fix missing comma:
   mutate(coordinates = if_else(unique_id==722, "31.568502, -89.838409", coordinates)) %>% 
   separate(coordinates,into=c("lat","lng"), sep=",", convert=TRUE) %>%  
-  st_as_sf(coords=c("lng","lat"),crs=4326) -> confed; 
+  st_as_sf(coords=c("lng","lat"),crs=4326, remove=FALSE) -> confed; 
 
-confed <- points_elided_sf(confed); 
+summary(confed)
+
 
 count(confed, symbol_type,sort=TRUE); 
 
@@ -38,6 +40,8 @@ usa <- usa_sf();
 
 # remove the "removed" symbols:
 confed %>% filter(was_this_symbol_removed=="Active") -> confed
+
+confed <- points_elided_sf(confed); 
 
 ggplot() + 
   geom_sf(data=usa,size=0.125,fill="#f9f9f9") + 
