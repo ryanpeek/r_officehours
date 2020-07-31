@@ -1,17 +1,34 @@
+# Working with .gpx files in SF
+
+
+# Packages We Need --------------------------------------------------------
+
+# this requires the following packages
+
 library(sf)
 library(dplyr)
 library(lubridate)
 library(mapview)
 
-# https://geocompr.github.io/geocompkg/articles/gps-tracks.html
 
-# the gpx file
+# Read in our File! -------------------------------------------------------
+
+# can download locally from here: https://raw.githubusercontent.com/ryanpeek/r_officehours/master/data/NFA.GPX
+
+# the gpx file we'll use: here a locally downloaded file
 file1 <- "~/Downloads/NFA.GPX"
-st_layers(file1)
+
+# or read straight from the interwebs
+file1 <- "https://raw.githubusercontent.com/ryanpeek/r_officehours/master/data/NFA.GPX"
 
 # read just the tracks:
 trx <- st_read(file1, layer = "tracks")
+
+# check the names of the tracks
 trx$name
+
+# these are dates from a GPS for each day the track was taken
+
 
 # pull a single track
 trx1 <- trx %>% filter(name=="2017-05-05-NFA")
