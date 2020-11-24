@@ -39,7 +39,6 @@ turkey_trimmed <- turkeys %>%
   # warning about NA's is ok! drop the NA values
   filter(!is.na(value))
 
-
 # let's re-code awkward data_item categories with case_when()
 turkey_trimmed <- turkey_trimmed %>%
   mutate(prod_type=case_when(
@@ -298,3 +297,79 @@ g2 <- ggplot() +
 
 ggsave(combined_plot, filename = "figures/correlation_btwn_turkeys_asthma.jpg", width = 11, height = 8, dpi=300, units = "in")
 
+
+# BONUS: Map Roads with Turkey in the Name -----------------------------------
+
+library(tigris)
+library(stringi)
+library(hrbrthemes)
+library(mapdeck) # need API token
+mapdeck_api_key <- Sys.getenv("MAPBOX_TOKEN")
+
+# get CA counties
+ca_cntys <- read_sf("data_output/map_base_layers.gpkg", "county_composite") %>% 
+  filter(iso_3166_2=="CA") %>% st_transform(4269)
+
+# get counties from ca and return as sf
+list_counties("ca") %>%
+  #slice(25:58) %>% # to grab specific county
+  pull(county) %>%
+  map(~roads("ca", .x, class="sf")) -> ca_roads  
+# this took about 5 min
+
+# takes awhile
+ca_roads %>% do.call(rbind, .) -> ca_roads_df
+
+# save this object for quicker future access
+save(ca_roads_df, file = "data/ca_roads_tigris_sf.rda")
+
+# take a look
+glimpse(ca_roads[[1]])
+
+# now go through and pull only roads with "turkey"
+map(ca_roads, ~filter(.x, stri_detect_fixed(FULLNAME, "turkey", case_insensitive = TRUE))) %>%
+  do.call(rbind, .) -> turkey_roads
+
+# add centroids:
+turkey_roads_cent <- turkey_roads %>% 
+  st_centroid() %>% st_coordinates() %>% as.data.frame()
+turkey_roads <- turkey_roads %>% 
+  bind_cols(turkey_roads_cent)
+
+# map with hrbrmstr themes
+library(hrbrthemes)
+
+# map
+ggplot() +
+  geom_sf(data = ca_cntys, color = "#b2b2b2", size = 0.125, fill = "#3B454A") +
+  geom_sf(data = turkey_roads, color = "#CD661D", size = 1) +
+  coord_sf(datum = NA) +
+  labs(
+    title = "Roads with 'Turkey' in California",
+    subtitle = "Linestrings of all roads in CA with 'turkey' in the name",
+    caption = "Data source: {tigris} • <https://rud.is/books/30-day-map-challenge/green-01.html>"
+  ) +
+  ggdark::dark_theme_minimal(base_family = "Roboto Condensed") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5)) +
+  theme(axis.text = element_blank()) +
+  theme(legend.position = "none")
+
+ggsave(filename = "figures/turkey_roads_of_ca.png", dpi=300, width = 8, height = 11)
+
+# with mapbox
+mapdeck(
+  token = mapdeck_api_key,
+  style = mapdeck_style("dark"),
+  location = c(-121.48, 38.58),
+  zoom = 6
+) %>%
+  add_sf(
+    data = turkey_roads,
+    layer_id = "FULLNAME",
+    stroke_width = 2,
+    stroke_colour = "#CD661D",
+    tooltip = "FULLNAME",
+    update_view = FALSE
+  ) %>%
+  add_title("'Turkey' Roads of CA")

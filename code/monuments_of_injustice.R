@@ -49,7 +49,8 @@ ggplot() +
   ggthemes::scale_color_tableau(name=NULL,"Tableau 20") + 
   coord_sf(crs=us_aeqd_proj,datum=NA) + 
   theme_ipsum_es(grid = " ") +
-  labs(caption="source: https://twitter.com/hrbrmstr/status/1271057843639259136?s=20")
+  labs(subtitle="Confederate Monuments Remaining",
+       caption="source: https://twitter.com/hrbrmstr/status/1271057843639259136?s=20")
 
 library(mapview)
-mapview(confed, zcol="symbol_type")
+mapview(confed, zcol="symbol_type", layer.name="Confed Monument Types")
