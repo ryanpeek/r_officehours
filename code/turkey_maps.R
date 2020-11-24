@@ -9,6 +9,7 @@ library(sf) # spatial anything
 library(mapview) # interactive mapping
 library(janitor) # cleaning names
 library(tmap) # mapping 
+library(tmaptools)
 library(OpenStreetMap) # adding base layers to tmaps
 library(magrittr) # for piping with %T>%
 library(albersusa) # mapping US counties/boundaries
@@ -23,9 +24,6 @@ library(albersusa) # mapping US counties/boundaries
 turkeys <- read_csv("https://raw.githubusercontent.com/ryanpeek/r_officehours/main/data/annual_turkey_data_by_state_USDA_1929-2020.csv")
 
 # turkeys <- read_csv("data/annual_turkey_data_by_state_USDA_1929-2020.csv")
-
-# load("data/turkey_trimmed_us_1929-2020.rda")
-# load(url("https://raw.githubusercontent.com/ryanpeek/r_officehours/main/data/turkey_trimmed_us_1929-2020.rda"))
 
 # Tidy and Clean Data -----------------------------------------------------
 
@@ -72,16 +70,22 @@ st_write(cnty_comp,dsn = "data_output/map_base_layers.gpkg", layer = "county_com
 # check layers?
 st_layers("data_output/map_base_layers.gpkg")
 
+# Load Intermediate Files -------------------------------------------------
+
+# turkey data
+# load("data/turkey_trimmed_us_1929-2020.rda")
+# load(url("https://raw.githubusercontent.com/ryanpeek/r_officehours/main/data/turkey_trimmed_us_1929-2020.rda"))
+
+# states data
+us_comp <- read_sf("data_output/map_base_layers.gpkg", "us_composite")
+cnty_comp <- st_read("data_output/map_base_layers.gpkg", "county_composite")
 
 # Join Data ---------------------------------------------------------------
 
-# now we can join by state name
+# now we can join by state name, pay attention to column names for x, y
 turkey_states <- left_join(turkey_trimmed, us_comp, by=c("state_ansi"="fips_state")) %>%
   # and make a sf object...works because of sticky geometry column
   st_as_sf()
-
-
-# Now Map! ----------------------------------------------------------------
 
 # mapview to make a quick map:
 t2019 <- turkey_states %>%
@@ -90,16 +94,20 @@ t2019 <- turkey_states %>%
 # make an interactive map
 mapview(t2019, zcol="value")
 
-# Visualize ---------------------------------------------------------------
+
+# OPTIONAL: Data Wrangling Fun --------------------------------------------
+
+# optional, drop out if no time
 
 # first get the top 3 per year
 turkey_t3_dollars <- turkey_states %>%
   st_drop_geometry() %>% 
+  ungroup() %>% 
   filter(!is.na(name)) %>% 
   select(name, prod_type, value, year) %>% 
   filter(prod_type=="production_dollars") %>% 
-  group_by(prod_type, year) %>%
-  slice_max(order_by = c(value, name), n=3)  
+  group_by(year) %>%
+  dplyr::slice_max(order_by = c(value), n=3)  
 
 # then group and tally by state
 turkey_t3_dollars <- turkey_t3_dollars %>% group_by(name) %>% 
@@ -114,7 +122,6 @@ turkey_top3 <-
   distinct(name, .keep_all = T) %>% 
   slice_max(n=3, order_by=tot_top3) %T>% 
   View()
-
 
 # make a plot of just production by top 3
 ggplot() +
@@ -143,47 +150,56 @@ ca_turkey <- read_csv("data/chicken_turkey_CA_usda.csv") %>%
   filter(!grepl("(D)", value)) %>% 
   mutate(value=as.integer(gsub(",", replacement = "", value)))
 
-# map and join to CA counties
+# TRIM & JOIN WITH CA COUNTIES -------------------------------------------
 
-
-# TRIM CA COUNTIES --------------------------------------------------------
-
+# get only CALIFORNIA COUNTIES
 ca_cntys <- cnty_comp %>% dplyr::filter(iso_3166_2=="CA")
 
-ca_cnty_turkey <- left_join(ca_turkey, cnty_comp %>% 
-                              filter(iso_3166_2=="CA"), 
-                            by=c("county_ansi"="county_fips")) %>% 
+# join by the CA code
+ca_cnty_turkey <- left_join(ca_turkey, cnty_comp %>% filter(iso_3166_2=="CA"), 
+                            by=c("county_ansi"="county_fips")) %>%
   st_as_sf()
 
-# this includes all years though
+# this includes all years though...look at one year
 ca_cnty_turkey17 <- ca_cnty_turkey %>% filter(year==2017)
 mapview(ca_cnty_turkey17, zcol="value", layer.name="Head of Turkey") 
 
+# how many unique years?
 table(ca_cnty_turkey$year)
 
+# TMAP MAP ----------------------------------------------------------------
+
 # make faceted map of 1997 and 2017 turkey production in CA
+
+# set tmap mode to "static" mapping
 tmap_mode("plot")
 
-# get baselayer for ca_cntys
-library(OpenStreetMap)
+# get baselayer for ca_cntys (change zoom as needed)
 osm_ca_cnty <- read_osm(ca_cntys, ext=1.1)
 
 # pick two years
 ca_cnty_turkey2 <- ca_cnty_turkey %>% filter(year %in% c(1997, 2017))
 
+# now make map...layered similar to ggplots
+# requires spatial file first in tm_shape, then type
 m1 <- 
+  # this is the background map
   tm_shape(osm_ca_cnty) + tm_rgb() +
+  # counties
   tm_shape(ca_cntys) +
   tm_polygons(border.col = "gray10", border.alpha = 0.1) +
+  # this is the turkey data
   tm_shape(ca_cnty_turkey2) + 
   tm_polygons(lwd = 0.2, border.col = "gray", col = "value", 
               title="No. of Turkeys") +
+  # label the counties
   tm_text("county", size = 0.5)+
+  # now facet the years into separate panels
   tm_facets(by = "year", drop.empty.facets = TRUE) +
+  # fancy it up
   tm_layout(frame = FALSE, legend.outside = F, fontfamily = "Roboto", 
             legend.bg.color = "white", legend.bg.alpha = 0.8,
             legend.width = .4,
-            #legend.format = list(format="f"),
             legend.position = c(0.6, 0.8))+
   tm_scale_bar(width = 0.2, position = c("left","bottom")) +
   tm_compass(type = "arrow")
@@ -192,48 +208,67 @@ m1
 
 # Read in CalEnviroscreen Data ---------------------------------------------
 
+# More on the Cal-Enviroscreen website here: https://oehha.ca.gov/calenviroscreen/report/calenviroscreen-30
+# Full report can be found here: https://oehha.ca.gov/media/downloads/calenviroscreen/report/ces3report.pdf
+# important statewide assessment of IMPACT
+
+# let's look at layers in this File Geodatabase
 st_layers("data/CES3_June2018update.gdb/")
+
+# read in as above:
 ces <- st_read(dsn = "data/CES3_June2018update.gdb/", layer="CES3_June2018updateGDB")
+
+# they don't match CRS
 st_crs(ces) # 3310
 st_crs(ca_cnty_turkey17) # 4326
 
+# fix with st_transform
+ca_cnty_turkey <- st_transform(ca_cnty_turkey17, 3310)
+
+# quick preview to establish spurious correlations
 mapview(ces, zcol="asthmaP")
 mapview(ces, zcol="pmP")
 
 
+# Spatial Dissolve & Aggregation ------------------------------------------
+
 # DISSOLVE
 # let's aggregate up to County level for Asthma scores and compare with turkey farming
 ces_asthma <- ces %>% group_by(California_County) %>% 
-  summarize(asthma_mean = median(asthmaP)) %>% 
-  st_cast()
-# takes a second
-mapview(ces_asthma, zcol="asthma_mean") # a bit messy...let's use the clean counties layer
+  summarize(asthma_median = median(asthmaP)) %>% 
+  st_cast() # takes a second
+
+# quick preview
+mapview(ces_asthma, zcol="asthma_median") # a bit messy...let's use the clean counties layer
 
 # drop geometry
 ces_asthma <- st_drop_geometry(ces_asthma)
 
 # JOIN
-ces_asthma_cnty <- left_join(ca_cntys, st_drop_geometry(ces_asthma), by=c("name"="California_County"))
+ces_asthma_cnty <- left_join(ca_cntys, ces_asthma, by=c("name"="California_County"))
 
-# WHAT@!?
-mapview(ces_asthma_cnty, zcol="asthma_mean")
+# WHAT@!? Where's all the data?
+mapview(ces_asthma_cnty, zcol="asthma_median")
 
 # empty spaces...let's fix:
 ces_asthma <- ces_asthma %>% 
   mutate(ca_county = stringr::str_squish(California_County))
 
+# rejoin
 ces_asthma_cnty <- left_join(ca_cntys, ces_asthma, by=c("name"="ca_county"))
-mapview(ces_asthma_cnty, zcol="asthma_mean")
 
-# NOW A SIDE BY SIDE MAP WITH TURKEYS!!
+# replot
+mapview(ces_asthma_cnty, zcol="asthma_median")
+
 
 # SIDE BY SIDE MAP! -------------------------------------------------------
 
-# First, make Asthma Map:
+# now let's make a side by side map of turkeys causing asthma:
 
+# First, make Asthma Map:
 g1 <- ggplot() + 
   # asthma
-  geom_sf(data=ces_asthma_cnty, aes(fill=asthma_mean))+
+  geom_sf(data=ces_asthma_cnty, aes(fill=asthma_median))+
   scale_fill_viridis_c("CES Asthma \n Median Percentile")+
   coord_sf(datum=NA) +
   ggspatial::annotation_scale() +
@@ -258,7 +293,6 @@ g2 <- ggplot() +
   theme_classic() +
   theme(legend.position = c(0.7, 0.8),
         legend.background = element_rect(fill="NA"))
-g2  
 
 (combined_plot <- cowplot::plot_grid(g1, g2, align = "h", nrow=1, label_y = 0.9, labels = "AUTO"))
 
