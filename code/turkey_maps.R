@@ -1,46 +1,48 @@
-# turkey maps
-
-# Data from here: https://quickstats.nass.usda.gov
-
+###### A TUTORIAL IN MAPPING AND SPURIOUS CORRELATION
+###### R. Peek, 2020
 
 # Load Libraries ----------------------------------------------------------
 
-# first load libraries
-library(tidyverse)
-library(sf)
-library(USAboundaries)
-library(mapview)
-library(janitor)
+library(tidyverse) # wrangling and plotting
+library(cowplot) # plotting multiple panels 
+library(sf) # spatial anything
+library(mapview) # interactive mapping
+library(janitor) # cleaning names
+library(tmap) # mapping 
+library(OpenStreetMap) # adding base layers to tmaps
+library(magrittr) # for piping with %T>%
+library(albersusa) # mapping US counties/boundaries
+# install with remotes::install_git("https://git.sr.ht/~hrbrmstr/albersusa"))
+# for global data, see library(rnaturalearth)
 
-
-# Import Data -------------------------------------------------------------
+# Import State Turkey Data ------------------------------------------------
 
 # read in our turkey data!
-#turkeys <- read_csv("https://raw.githubusercontent.com/ryanpeek/cws_code_club/main/data/annual_turkey_data_by_state_USDA_1929-2020.csv")
+# this comes from here: https://quickstats.nass.usda.gov
 
-turkeys <- read_csv("data/annual_turkey_data_by_state_USDA_1929-2020.csv")
+turkeys <- read_csv("https://raw.githubusercontent.com/ryanpeek/r_officehours/main/data/annual_turkey_data_by_state_USDA_1929-2020.csv")
 
+# turkeys <- read_csv("data/annual_turkey_data_by_state_USDA_1929-2020.csv")
+
+# load("data/turkey_trimmed_us_1929-2020.rda")
+# load(url("https://raw.githubusercontent.com/ryanpeek/r_officehours/main/data/turkey_trimmed_us_1929-2020.rda"))
 
 # Tidy and Clean Data -----------------------------------------------------
 
-# let's take a look at the different variables:
-# # this is lbs and $ of turkey for each state for each year in the US
-
-# review data
+# review data: Data Items are different production types
 table(turkeys$`Data Item`)
-summary(turkeys)
 
 # make a clean dataset with the data we need to map and fix names
 turkey_trimmed <- turkeys %>%
-  select(Year, State, `State ANSI`, `Data Item`, Value) %>%
-  janitor::clean_names() %>%
-  # fix the value (remove commas and make integer)
+  janitor::clean_names() %>% # fixes terrible names
+  select(year, state, state_ansi, data_item, value) %>% 
+  # fix the value column: has commas and is character
   mutate(value=as.integer(gsub(pattern = ",", replacement = "", value))) %>%
   # warning about NA's is ok! drop the NA values
   filter(!is.na(value))
 
 
-# let's recode awkward data_item categories with case_when()
+# let's re-code awkward data_item categories with case_when()
 turkey_trimmed <- turkey_trimmed %>%
   mutate(prod_type=case_when(
     data_item=="TURKEYS - PRODUCTION, MEASURED IN $" ~ "production_dollars",
@@ -49,12 +51,12 @@ turkey_trimmed <- turkey_trimmed %>%
     grepl(pattern = "LB", data_item) ~ "production_lbs"
   ))
 
+# save back out as a clean data file we can use:
+save(turkey_trimmed, file = "data/turkey_trimmed_us_1929-2020.rda")
+
 
 # Get State Boundaries ----------------------------------------------------
 
-# many spatial datasets exist...for US this library is good.
-# for global data, see library(rnaturalearth)
-# also see albersusa (remotes::install_git("https://git.sr.ht/~hrbrmstr/albersusa"))
 library(albersusa)
 us_comp <- usa_sf() # get a composite of USA
 cnty_comp <- counties_sf() # composite counties
@@ -146,7 +148,7 @@ ca_turkey <- read_csv("data/chicken_turkey_CA_usda.csv") %>%
 
 # TRIM CA COUNTIES --------------------------------------------------------
 
-ca_cntys <- cnty_comp %>% filter(iso_3166_2)
+ca_cntys <- cnty_comp %>% dplyr::filter(iso_3166_2=="CA")
 
 ca_cnty_turkey <- left_join(ca_turkey, cnty_comp %>% 
                               filter(iso_3166_2=="CA"), 
@@ -159,22 +161,106 @@ mapview(ca_cnty_turkey17, zcol="value", layer.name="Head of Turkey")
 
 table(ca_cnty_turkey$year)
 
-# make faceted map of each year of turkey production in CA
-library(tmap)
-library(tmaptools)
-
+# make faceted map of 1997 and 2017 turkey production in CA
 tmap_mode("plot")
 
-m1 <- tm_shape(ca_cntys) +
+# get baselayer for ca_cntys
+library(OpenStreetMap)
+osm_ca_cnty <- read_osm(ca_cntys, ext=1.1)
+
+# pick two years
+ca_cnty_turkey2 <- ca_cnty_turkey %>% filter(year %in% c(1997, 2017))
+
+m1 <- 
+  tm_shape(osm_ca_cnty) + tm_rgb() +
+  tm_shape(ca_cntys) +
   tm_polygons(border.col = "gray10", border.alpha = 0.1) +
-  tm_shape(ca_cnty_turkey) + 
+  tm_shape(ca_cnty_turkey2) + 
   tm_polygons(lwd = 0.2, border.col = "gray", col = "value", 
               title="No. of Turkeys") +
-  #tm_facets(along = "year", free.scales.fill = FALSE, free.coords = FALSE) + # for animation
-  tm_facets(by = "year", ncol = 2, nrow = 3, free.scales.fill = FALSE, drop.empty.facets = T) +
-  tm_layout(frame = FALSE, legend.outside = TRUE, legend.position = c(-0.75, 0.05))+
-  tm_scale_bar(width = 0.2) +
-  tm_compass()
+  tm_text("county", size = 0.5)+
+  tm_facets(by = "year", drop.empty.facets = TRUE) +
+  tm_layout(frame = FALSE, legend.outside = F, fontfamily = "Roboto", 
+            legend.bg.color = "white", legend.bg.alpha = 0.8,
+            legend.width = .4,
+            #legend.format = list(format="f"),
+            legend.position = c(0.6, 0.8))+
+  tm_scale_bar(width = 0.2, position = c("left","bottom")) +
+  tm_compass(type = "arrow")
 m1
 
-#tmap_animation(m1, delay=70)
+
+# Read in CalEnviroscreen Data ---------------------------------------------
+
+st_layers("data/CES3_June2018update.gdb/")
+ces <- st_read(dsn = "data/CES3_June2018update.gdb/", layer="CES3_June2018updateGDB")
+st_crs(ces) # 3310
+st_crs(ca_cnty_turkey17) # 4326
+
+mapview(ces, zcol="asthmaP")
+mapview(ces, zcol="pmP")
+
+
+# DISSOLVE
+# let's aggregate up to County level for Asthma scores and compare with turkey farming
+ces_asthma <- ces %>% group_by(California_County) %>% 
+  summarize(asthma_mean = median(asthmaP)) %>% 
+  st_cast()
+# takes a second
+mapview(ces_asthma, zcol="asthma_mean") # a bit messy...let's use the clean counties layer
+
+# drop geometry
+ces_asthma <- st_drop_geometry(ces_asthma)
+
+# JOIN
+ces_asthma_cnty <- left_join(ca_cntys, st_drop_geometry(ces_asthma), by=c("name"="California_County"))
+
+# WHAT@!?
+mapview(ces_asthma_cnty, zcol="asthma_mean")
+
+# empty spaces...let's fix:
+ces_asthma <- ces_asthma %>% 
+  mutate(ca_county = stringr::str_squish(California_County))
+
+ces_asthma_cnty <- left_join(ca_cntys, ces_asthma, by=c("name"="ca_county"))
+mapview(ces_asthma_cnty, zcol="asthma_mean")
+
+# NOW A SIDE BY SIDE MAP WITH TURKEYS!!
+
+# SIDE BY SIDE MAP! -------------------------------------------------------
+
+# First, make Asthma Map:
+
+g1 <- ggplot() + 
+  # asthma
+  geom_sf(data=ces_asthma_cnty, aes(fill=asthma_mean))+
+  scale_fill_viridis_c("CES Asthma \n Median Percentile")+
+  coord_sf(datum=NA) +
+  ggspatial::annotation_scale() +
+  labs(caption = "Data from CalEnviroscape", subtitle = "Correlation between turkeys and asthma") +
+  theme_classic() +
+  theme(legend.position = c(0.7, 0.8),
+        legend.background = element_rect(fill="NA"))
+
+g2 <- ggplot() + 
+  # turkeys
+  geom_sf(data=ca_cntys, fill=NA)+
+  geom_sf(data=ca_cnty_turkey2 %>% filter(year==2017), 
+          aes(fill=value))+
+  scale_fill_viridis_c("Number of Turkeys", option = "A")+
+  coord_sf(datum=NA) +
+  ggspatial::annotation_north_arrow(location="tr",
+                                    height = unit(1.2,"cm"), 
+                                    width = unit(0.9, "cm"),
+                                    pad_x = unit(0.8, "cm"),
+                                    pad_y = unit(0.8, "cm")) +
+  labs(caption = "Data from USDA") +
+  theme_classic() +
+  theme(legend.position = c(0.7, 0.8),
+        legend.background = element_rect(fill="NA"))
+g2  
+
+(combined_plot <- cowplot::plot_grid(g1, g2, align = "h", nrow=1, label_y = 0.9, labels = "AUTO"))
+
+ggsave(combined_plot, filename = "figures/correlation_btwn_turkeys_asthma.jpg", width = 11, height = 8, dpi=300, units = "in")
+
