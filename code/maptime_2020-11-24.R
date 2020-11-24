@@ -1,5 +1,12 @@
 # maptime 2020-11-24
-# r. peek
+
+### A TUTORIAL IN MAPPING AND SPURIOUS CORRELATION
+### R. Peek, 2020
+
+# data we'll be needing lives here: https://github.com/ryanpeek/r_officehours/tree/main/data
+
+
+# Libraries ---------------------------------------------------------------
 
 library(tidyverse) # wrangling and plotting
 library(cowplot) # plotting multiple panels 
