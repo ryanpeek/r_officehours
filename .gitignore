@@ -8,6 +8,9 @@
 # User-specific files
 .Ruserdata
 
+# big files
+data/ca_roads_tigris_sf.rda
+
 # Example code in package build process
 *-Ex.R
 
