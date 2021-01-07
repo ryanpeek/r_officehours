@@ -10,8 +10,6 @@ library(USAboundaries)
 # Get Data ----------------------------------------------------------------
 
 states <- USAboundaries::us_boundaries(type="state",states=c("ca","or"))
-mapview(states)
-
 
 # Get HUCs ----------------------------------------------------------------
 
@@ -49,23 +47,33 @@ subset <- subset_nhdplus(comids = flowline$nhdplus_comid,
 
 
 
-# Get EcoRegions ----------------------------------------------------------
+# Get EcoRegions & Load Data ----------------------------------------------------------
 
-ecoreg <- read_sf("data/us_eco_l3.shp")
+#ecoreg <- read_sf("data/us_eco_l3.shp") %>% st_transform(4326)
+# trim to just ca,or
+ecoreg_l <- ecoreg[states,]
+#st_write(ecoreg_l, "data_output/klam_watershed.gpkg", layer = "ecoreg_ca_or")
+
 nhdarea <- st_read("data_output/klam_watershed.gpkg", layer = "NHDArea") %>% st_transform(4326)
-mapview(nhdarea)
 
 ca <- states %>% filter(stusps=="CA")
 
+# get HUC
+hucKlam <- read_rds("data_output/klam_h8.rds")
+huc_diss <- st_union(hucKlam) # dissolve 
+
+# river poly
 klam_poly <- st_intersection(nhdarea, ca)
 klam_poly <- klam_poly %>% filter(id=="nhdarea.16155")
-mapview(klam_poly)
-st_write(klam_poly, "data_output/klam_watershed.gpkg", layer = "klam_river_poly")
+
+#st_write(klam_poly, "data_output/klam_watershed.gpkg", layer = "klam_river_poly")
 
 st_layers("data_output/klam_watershed.gpkg")
 
+# catchments
 catch <- st_read("data_output/klam_watershed.gpkg", layer="CatchmentSP")
 
+# flowlines
 klam_flowline <- st_read("data_output/klam_watershed.gpkg", layer="NHDFlowline_Network")
 
 # Map ---------------------------------------------------------------------
@@ -75,7 +83,6 @@ library(tmaptools)
 # make larger bounding box
 klam_bb <- klam_poly %>% st_transform(3310) %>% 
   st_bbox() %>% st_as_sfc() %>% st_buffer(5000)
-mapview(klam_bb)
 
 # map
 klam_base <- tmaptools::read_osm(klam_bb, type="esri-topo", raster=TRUE)
@@ -84,13 +91,16 @@ klam_base <- tmaptools::read_osm(klam_bb, type="esri-topo", raster=TRUE)
 (map1 <- tm_shape(klam_base) + tm_rgb())
 
 # full map
-(map2 <- #map1 + 
+(map2 <- map1 + 
+    tm_shape(ecoreg_l)+
+    tm_fill(col = "L3_KEY", alpha=0.3, legend.show = FALSE) +
+    tm_shape(huc_diss) + 
+    tm_polygons(border.col = "slateblue4", alpha = 0, border.alpha = 0.5, lwd=2) +
     tm_shape(klam_flowline) + 
     tm_lines(col="steelblue", alpha=0.5, lwd=0.5) +
-    tm_shape(hucKlam) + 
-    tm_polygons(border.col = "slateblue4", alpha = 0, border.alpha = 0.5, lwd=1) +
     tm_shape(klam_poly) + 
     tm_polygons(col="dodgerblue", border.col = "steelblue", border.alpha = 0.8) +
-    tm_shape(klam_out) + tm_dots(col="black", shape=19) +
     tm_compass(size = 3, type="8star", position=c("left", "bottom"), show.labels = 2, color.light = "transparent") +
     tm_scale_bar(position=c("left", "bottom")))
+
+tmap_save(map2, filename = "figures/klam_basemap_ecoregs.png", width = 8.5, height = 11, units = "in", dpi = 300)
