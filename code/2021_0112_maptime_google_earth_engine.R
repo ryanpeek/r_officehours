@@ -69,9 +69,6 @@ st_write(sn_poly_s, "data_output/sierra_nevada_polygon_simple.shp", delete_layer
 
 ## Raster
 
-# replace 0 vals to NA with clamp
-eeImg_2 <- reclassify(eeImg, cbind(0, NA))
-
 # Convert to data.frame
 # Recall that we set maxPixels in the Earth Engine export to 1e8,
 # that's the maximum value you should consider using here as well. 
@@ -152,8 +149,11 @@ ggsave(filename = "figures/yoloContext_SR.jpg",
 library(tmap)
 library(tmaptools)
 
-# make background
+# fix raster by replacing 0's with NAs
+# replace 0 vals to NA with reclassify
+eeImg_2 <- reclassify(eeImg, cbind(0, NA))
 
+# make background
 (map1 <- tm_shape(eeImg_2) + tm_rgb() +
     tm_layout(frame=FALSE))
 
