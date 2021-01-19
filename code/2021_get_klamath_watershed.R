@@ -2,7 +2,7 @@
 
 library(sf)
 library(tidyverse)
-library(nhdplusTools)
+#library(nhdplusTools)
 library(mapview)
 mapviewOptions(fgb = FALSE)
 library(USAboundaries)
