@@ -33,3 +33,19 @@ mapview(um_flowlines, zcol="comid_length_m")@map %>% leaflet.extras::addMeasureP
 
 # another option?
 mapview(um_flowlines, zcol="nhdplus_comid")@map %>% leaflet::addMeasure()
+
+# basemap -----------------------------------------------------------------
+
+library(sf)
+library(mapview)
+library(leaflet)
+library(tidyverse)
+
+pt <- st_sfc(st_point(c(-122.39, 41.52)), crs=4326)
+
+mv_obj <- mapview(pt, map.types = "Esri.WorldImagery")
+
+mv_obj@map %>%
+  leaflet::addTiles(url = "https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryTopo/MapServer/tile/{z}/{y}/{x}")
+
+
