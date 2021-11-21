@@ -3,6 +3,8 @@
 # Talk content: https://github.com/JepsonNomad/contextMaps
 # Need GEE: https://code.earthengine.google.com/?authuser=1
 
+# https://jepsonnomad.github.io/tutorials/EE_Maps.html
+
 
 # Satellite Remote Sensing: -----------------------------------------------
 
