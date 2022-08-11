@@ -22,6 +22,7 @@ file1 <- "~/Downloads/NFA.GPX"
 file1 <- "https://raw.githubusercontent.com/ryanpeek/r_officehours/master/data/NFA.GPX"
 
 # read just the tracks:
+st_layers(file1)
 trx <- st_read(file1, layer = "tracks")
 
 # check the names of the tracks
