@@ -19,6 +19,8 @@ format:
       data-background-size: contain
       data-background-opacity: "0.7" 
 editor: source
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup}
@@ -27,8 +29,8 @@ editor: source
 # viz packages
 library(patchwork)
 library(paletteer)
-library(shadowtext)
-library(tidyverse)
+library(dplyr)
+library(ggplot2)
 
 # spatial packages
 library(sf)
@@ -91,38 +93,96 @@ pull data from Bing buildings for CA (https://github.com/microsoft/USBuildingFoo
 
 ## Making space for time...
 
-## {background-image="img/azimuth_inset_plot_nfamerican.png"}
+ - `parquet` files aren't just about compression (though some savings here)
 
-## Practice! 
+ - The real benefit is speed reading/operating/writing data!
+
+::: {.fragment} 
+
+![](https://media.giphy.com/media/Gpu3skdN58ApO/giphy.gif){fig-align="center" width=65%}
+
+:::
+
+## Practice! {.r-fit-text}
+
+## NHD Watersheds {.r-fit-text}
 
 ::: columns
 ::: {.column width="50%"}
-:::{.fragment .highlight-red}
-- take HUC12s and make into parquet file with sf class
-:::
+
+- Use {`nhdplusTools`} to get HUC12s for CA [^hint]
+- Save out as a `parquet` file with {`sf`} class
+- Read in and make a map!
+
 :::
 
 ::: {.column width="50%"}
 
-::: {.fragment .fade-in}
-![Map of healthy watersheds with zoom circle](img/map_hw_health_zoom_west_sierra.png){fig-alt="Zoom of the western sierra using the healthy watersheds data for CA"}
-:::
+![Map of healthy watersheds with zoom circle](img/WBD_Base_HUStructure_small.png){fig-alt="Watershed Boundary Dataset nested structure"}
+
 :::
 
 :::
+
+[^hint]: Try `nhdplusTools::get_huc("huc12")` with a state AOI
+
 
 ## {background-image="img/yuba_watershed.png" background-color="white"}
 
-### You Try: Watershed HUC12s {.r-fit-text}
+### HUC12
+
+## Get CA Outline and HUC12
+
+```{r}
+#| eval: false
+#| echo: true
+
+# run this chunk once and then eval:false
+
+# get CA and download HUC12s
+ca <- tigris::states(progress_bar=FALSE) %>% filter(NAME=="California")
+
+# can specify any given option for huc8, huc10,etc
+huc12 <- nhdplusTools::get_huc(ca, type = "huc12") # this takes a minute or two
+huc12 <- sf::st_cast(huc12, "MULTIPOLYGON") # fix geometry
+# save out
+geoarrow::write_geoparquet(huc12, here::here("data/nhd_huc12.parquet"))
+
+```
+
+## Read in and Map!
 
 
-## {background-image="https://github.com/microsoft/USBuildingFootprints/raw/master/images/example.JPG" background-color="black"}
+```{r}
+#| eval: false
+#| echo: true
+h12 <- read_geoparquet_sf(here::here("data/nhd_huc12.parquet"))
 
-### You Try: CA Vector Buildings {.r-fit-text}
+# plot
+ggplot() + geom_sf(data=h12, color="skyblue", alpha=0.3, linewidth=0.05)
+
+```
+
+```{r}
+#| eval: true
+#| echo: false
+h12 <- read_geoparquet_sf(here::here("data/nhd_huc12.parquet"))
+
+# plot
+ggplot() + geom_sf(data=h12, color="skyblue", alpha=0.3, linewidth=0.05)
+
+```
+
+
+## {background-image="https://github.com/microsoft/USBuildingFootprints/raw/master/images/example.JPG" background-color="black" background-opacity="0.7"}
+
+### CA Vector Buildings {.r-fit-text}
 
  - https://github.com/microsoft/USBuildingFootprints
+ - Downloaded CA only (`geoson.zip` is 466MB, unzipped 3.6GB)
+ - Includes building polygons for all of CA (**n=11,542,912**!)
  
-## Read it in
+## Read it in, Write it Out
 
 ```{r}
 #| eval: false
@@ -148,7 +208,7 @@ toc()
 # read in 14.724 seconds!
 ```
 
-## Get Counties {background-color="black"}
+## Crop by a County {background-color="black"}
 
 ```{r}
 #| eval: false
@@ -166,14 +226,37 @@ sf_use_s2(FALSE)
 sel_df <- df_parq[sel_cnty,]
 
 ```
-## Map Counties {background-color="white"}
+## Filter to Largest Buildings 
+
+::: {.nonincremental}
+ - Here we can read in, add area, and filter to buildings in the top 5% (largest area) of the county
+:::
+```{r}
+#| echo: true
+#| eval: true
+
+sel_df <- geoarrow::read_geoparquet_sf(here::here("data_output/ca_bing_buildings_butte.parquet"))
+# turn off s2
+sf_use_s2(FALSE)
+
+# add area
+sel_df <- sel_df %>% 
+  mutate(build_area = st_area(geometry))
+
+# sort by largest and select top 5% largest
+sel_df_lrg <- sel_df %>% 
+  arrange(build_area) %>% 
+  slice_max(order_by = build_area, prop = 0.05)
+
+```
+
+## Map!
 
 ```{r}
 #| echo: false
 #| eval: true
+#| fig-cap: "Buildings in the top 5% for area in the county"
 
-sel_df <- geoarrow::read_geoparquet_sf(here::here("data_output/ca_bing_buildings_butte.parquet"))
-
-mapview::mapview(sel_df)
+mapview::mapview(sel_df_lrg, layer.name="Largest Buildings")
 ```
 
