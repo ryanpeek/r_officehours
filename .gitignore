@@ -47,3 +47,4 @@ vignettes/*.pdf
 data/us_eco_l3*
 data/CA_OR_dams*
 data_output/klam_watershed.gpkg
+data_output/*parquet

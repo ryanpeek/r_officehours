@@ -1,0 +1,179 @@
+---
+title: "Using Geo/parquet"
+author:
+  - Dr. Ryan Peek
+format: 
+  revealjs:
+    self-contained: false
+    #width: 1600
+    #height: 900
+    logo: img/rabo_icon.png
+    highlight-style: ayu-mirage
+    code-block-border-left: "#31BAE9"
+    multiplex: true
+    theme: [default, rabo.scss]
+    slide-number: c/t
+    incremental: true
+    title-slide-attributes:
+      data-background-image: img/azimuth_inset_map_nfamerican.png
+      data-background-size: contain
+      data-background-opacity: "0.7" 
+editor: source
+---
+
+```{r setup}
+#| include: false
+
+# viz packages
+library(patchwork)
+library(paletteer)
+library(shadowtext)
+library(tidyverse)
+
+# spatial packages
+library(sf)
+library(geojsonsf)
+library(nhdplusTools)
+library(geoarrow)
+
+# for fonts
+theme_set(theme_minimal(base_family = "Atkinson Hyperlegible"))
+```
+
+## What is a `.parquet` file? (and why bother!?)
+
+::: columns
+::: column
+-   The `parquet` format is a file type that contains a table inside similar to a `.csv`
+
+-   However these files are stored in binary form *not as plain text*
+
+-   `parquet` files are column-oriented (unlike csv) and each column is stored *independently*
+
+-   `parquet` embeds the schema or data types/structure within the data itself
+:::
+
+::: column
+
+::: {.fragment .fade-in}
+[![Columnar Data](img/parquet-columnar.png){fig-alt="Columnar data comparison following parquets column first approach"}](https://arrow-user2022.netlify.app/)
+:::
+
+:::
+
+:::
+
+::: {.footer}
+<https://ryanpeek.org>
+:::
+
+::: notes
+pull data from Bing buildings for CA (https://github.com/microsoft/USBuildingFootprints) and get CA data: https://usbuildingdata.blob.core.windows.net/usbuildings-v2/California.geojson.zip
+:::
+
+## [geoarrow](https://paleolimbot.github.io/geoarrow/)
+
+::: columns
+::: {.column width="70%"}
+
+-   [package that leverages `{sf}` and `arrow`]{.fragment .semi-fade-out}
+-   really [fast]{.fragment .highlight-red} way to store large spatial data
+-   can read or write parquet & sf files [^note]
+
+:::
+
+[^note]: Also see the [{`sfarrow`}](https://wcjochem.github.io/sfarrow/index.html) package
+
+::: {.column width="30%" .fragment}
+![](img/flare_helix.png)
+:::
+:::
+
+## Making space for time...
+
+## {background-image="img/azimuth_inset_plot_nfamerican.png"}
+
+## Practice! 
+
+::: columns
+::: {.column width="50%"}
+:::{.fragment .highlight-red}
+- take HUC12s and make into parquet file with sf class
+:::
+:::
+
+::: {.column width="50%"}
+
+::: {.fragment .fade-in}
+![Map of healthy watersheds with zoom circle](img/map_hw_health_zoom_west_sierra.png){fig-alt="Zoom of the western sierra using the healthy watersheds data for CA"}
+:::
+:::
+
+:::
+
+## {background-image="img/yuba_watershed.png" background-color="white"}
+
+### You Try: Watershed HUC12s {.r-fit-text}
+
+
+## {background-image="https://github.com/microsoft/USBuildingFootprints/raw/master/images/example.JPG" background-color="black"}
+
+### You Try: CA Vector Buildings {.r-fit-text}
+
+ - https://github.com/microsoft/USBuildingFootprints
+ 
+## Read it in
+
+```{r}
+#| eval: false
+#| echo: true
+
+library(tictoc)
+tic()
+df <- geojsonsf::geojson_sf("~/Downloads/California.geojson") 
+#df <- st_read("~/Downloads/California.geojson")
+toc()
+# 257.514 sec elapsed
+
+# write it out
+tic()
+geoarrow::write_geoparquet(df, here::here("data_output/ca_bing_buildings.parquet"))
+toc()
+# writes in 11.745 seconds!
+
+# read it back in
+tic()
+df_parq <- geoarrow::read_geoparquet_sf(here::here("data_output/ca_bing_buildings.parquet"))
+toc()
+# read in 14.724 seconds!
+```
+
+## Get Counties {background-color="black"}
+
+```{r}
+#| eval: false
+#| echo: true
+
+library(tigris)
+
+cnty <- counties(state="CA")
+sel_cnty <- cnty %>% filter(NAME=="Butte") %>% st_transform(4326)
+st_crs(df_parq)$epsg
+st_crs(sel_cnty)$epsg
+
+# crop
+sf_use_s2(FALSE)
+sel_df <- df_parq[sel_cnty,]
+
+```
+## Map Counties {background-color="white"}
+
+```{r}
+#| echo: false
+#| eval: true
+
+sel_df <- geoarrow::read_geoparquet_sf(here::here("data_output/ca_bing_buildings_butte.parquet"))
+
+mapview::mapview(sel_df)
+```
+
