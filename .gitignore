@@ -52,3 +52,4 @@ data/*parquet
 docs/*parquet
 docs/*html
 *html
+docs/geoparquet/*.html
