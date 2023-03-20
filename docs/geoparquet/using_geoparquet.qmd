@@ -42,6 +42,47 @@ library(geoarrow)
 theme_set(theme_minimal(base_family = "Atkinson Hyperlegible"))
 ```
 
+# `r fontawesome::fa("laptop-code", "white")` Code Ready? {background-color="#447099" transition="slide-in"}
+
+-   Open RStudio
+-   Website: `https://github.com/ryanpeek/r_officehours/blob/main/docs/geoparquet/using_geoparquet.qmd`
+
+```{r}
+#| echo: false
+library(countdown)
+countdown_timer <- function(
+    minutes = 1, 
+    play_sound = TRUE, 
+    font_size = "2em", 
+    ...
+) {
+  countdown(
+    minutes = minutes,
+    # Fanfare when it's over
+    play_sound = play_sound,
+    # Set timer theme to match solarized colors
+    color_border              = "#404041",
+    color_text                = "white",
+    color_background = "#447099",
+    color_running_background  = "#72994E",
+    color_running_text        = "white",
+    color_finished_background = "#EE6331",
+    color_finished_text       = "white",
+    font_size = font_size,
+    ...
+  )
+}
+```
+
+<br>
+<br>
+
+```{R}
+#| echo: false
+countdown_timer(1)
+```
+
+
 ## What is a `.parquet` file? (and why bother!?)
 
 ::: columns
@@ -136,9 +177,7 @@ pull data from Bing buildings for CA (https://github.com/microsoft/USBuildingFoo
 ```{r}
 #| eval: false
 #| echo: true
-
-# run this chunk once and then eval:false
-
+#| code-line-numbers: "|2|5|8"
 # get CA and download HUC12s
 ca <- tigris::states(progress_bar=FALSE) %>% filter(NAME=="California")
 
@@ -187,11 +226,10 @@ ggplot() + geom_sf(data=h12, color="skyblue", alpha=0.3, linewidth=0.05)
 ```{r}
 #| eval: false
 #| echo: true
-
+#| code-line-numbers: "|2|3|4|9|15"
 library(tictoc)
 tic()
 df <- geojsonsf::geojson_sf("~/Downloads/California.geojson") 
-#df <- st_read("~/Downloads/California.geojson")
 toc()
 # 257.514 sec elapsed
 
@@ -213,7 +251,7 @@ toc()
 ```{r}
 #| eval: false
 #| echo: true
-
+#| code-line-numbers: "|9"
 library(tigris)
 
 cnty <- counties(state="CA")
